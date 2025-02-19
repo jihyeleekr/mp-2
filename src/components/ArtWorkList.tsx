@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import useSWR from "swr"; // Source: https://swr.vercel.app/docs/getting-started
+import { useState } from "react";
 import { ArtWork } from "../interface/ArtWork.ts";
 import ArtworkPreview from "./ArtWorkPreview.tsx";
 import styled from "styled-components";
 
+// Styled Components
 const Container = styled.div`
     text-align: center;
     padding: 20px;
@@ -23,7 +25,7 @@ const StyledInput = styled.input`
     border-radius: 8px;
     outline: none;
     transition: all 0.3s ease-in-out;
-    
+
     &:focus { //Source: https://styled-components.com/docs/basics
         border-color: #007BFF;
         box-shadow: 0px 0px 8px rgba(0, 123, 255, 0.6);
@@ -34,67 +36,45 @@ const StyledInput = styled.input`
     }
 `;
 
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
 const ArtWorkList = () => {
     const [category, setCategory] = useState("korean");
     const [numArtwork, setNumArtwork] = useState(3);
-    const [artworks, setArtworks] = useState<ArtWork[]>([]);
-    const [allObjectIDs, setAllObjectIDs] = useState<number[]>([]);
 
-    useEffect(() => {
-        async function fetchObjectIDs() {
-            try {
-                const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${category}`);
-                const data = await res.json();
+    const { data: objectData, error: objectError } = useSWR<{ objectIDs?: number[] } >
+    (
+        category ? `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${category}` : null,
+        fetcher
+    );
 
-                if (!data.objectIDs || data.objectIDs.length === 0) {
-                    setAllObjectIDs([]);
-                    setArtworks([]);
-                    return;
-                }
+    const objectIDs: number[] = objectData?.objectIDs || [];
+    const fetchValidArtworks = async (urls: string[]): Promise<ArtWork[]> => {
+        try {
+            const fetchedArtworks = await Promise.all(urls.map(url => fetcher(url)));
+            const validArtworks = fetchedArtworks.filter(artwork => artwork.primaryImageSmall);
 
-                setAllObjectIDs(data.objectIDs);
-            } catch (error) {
-                console.error("Error fetching object IDs:", error);
-            }
+            return validArtworks.slice(0, numArtwork);
+        } catch (error) {
+            console.error("Error fetching artworks:", error);
+            return [];
         }
+    };
 
-        fetchObjectIDs();
-    }, [category]);
+    const { data: artworksData, error: artworkError } = useSWR<ArtWork[]>
+    (
+        objectIDs.length > 0 ?
+            objectIDs.slice(0, numArtwork * 2).map(id => `https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
+            : null,
+        fetchValidArtworks
+    );
 
-    useEffect(() => {
-        async function fetchArtworks() {
-            if (allObjectIDs.length === 0) {
-                setArtworks([]);
-                return;
-            }
-
-            const artworksData: ArtWork[] = [];
-            let index = 0;
-
-            while (artworksData.length < numArtwork && index < allObjectIDs.length) {
-                try {
-                    const id = allObjectIDs[index];
-                    const artRes = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`);
-                    const artwork = await artRes.json();
-
-                    if (artwork.primaryImageSmall) {
-                        artworksData.push(artwork);
-                    }
-                } catch (error) {
-                    console.error(`Error fetching artwork ${allObjectIDs[index]}:`, error);
-                }
-
-                index++;
-            }
-
-            setArtworks(artworksData);
-        }
-
-        fetchArtworks();
-    }, [numArtwork, allObjectIDs]);
+    if (objectError) return <p>Error fetching artwork IDs</p>;
+    if (artworkError) return <p>Error fetching artwork details</p>;
 
     return (
         <Container>
+
             <h1>The Metropolitan Museum of Art Collection</h1>
             <h2>{category.charAt(0).toUpperCase() + category.slice(1)}</h2>
 
@@ -113,13 +93,15 @@ const ArtWorkList = () => {
                 />
             </InputsContainer>
 
-            {artworks.length > 0 ? (
-                artworks.map((artwork) => (
-                    <ArtworkPreview key={artwork.objectID} artwork={artwork} />
-                ))
+            {artworksData?.length ? (artworksData.map((artwork) =>
+                    (
+                        <ArtworkPreview key={artwork.objectID} artwork={artwork} />
+                    )
+                )
             ) : (
-                <p>No artworks found for "{category}"</p>
-            )}
+                    <p>No artworks found for "{category}"</p>
+                )
+            }
         </Container>
     );
 };
