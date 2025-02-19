@@ -68,11 +68,12 @@ const ArtWorkList = () => {
                 return;
             }
 
-            const objectIds = allObjectIDs.slice(0, Math.max(1, numArtwork));
             const artworksData: ArtWork[] = [];
+            let index = 0;
 
-            for (const id of objectIds) {
+            while (artworksData.length < numArtwork && index < allObjectIDs.length) {
                 try {
+                    const id = allObjectIDs[index];
                     const artRes = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`);
                     const artwork = await artRes.json();
 
@@ -80,8 +81,10 @@ const ArtWorkList = () => {
                         artworksData.push(artwork);
                     }
                 } catch (error) {
-                    console.error(`Error fetching artwork ${id}:`, error);
+                    console.error(`Error fetching artwork ${allObjectIDs[index]}:`, error);
                 }
+
+                index++;
             }
 
             setArtworks(artworksData);
@@ -89,6 +92,7 @@ const ArtWorkList = () => {
 
         fetchArtworks();
     }, [numArtwork, allObjectIDs]);
+
     return (
         <Container>
             <h1>The Metropolitan Museum of Art Collection</h1>
