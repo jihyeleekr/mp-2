@@ -42,7 +42,7 @@ const ArtWorkList = () => {
     useEffect(() => {
         async function fetchArtworks() {
             try {
-                const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?q=${category}`);
+                const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${category}`);
                 const data = await res.json();
 
                 if (!data.objectIDs) {
